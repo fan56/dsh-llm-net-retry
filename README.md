@@ -1,112 +1,101 @@
 # dsh-llm-net-retry
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh)
-plugin that retries model-request failures OpenAI-compatible gateways report as
-`finish_reason: "network_error"` — failures the stock retry policy cannot
-classify and therefore lets hard-fail the whole turn.
+[English](README.en.md)
 
-## Why
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）插件：重试网关以
+`finish_reason: "network_error"` 上报的模型请求失败——这类失败被 dsh 原生重试策略归为不可重试，
+导致整个 turn 直接硬失败。
 
-Some gateways (e.g. [OpenCode Zen](https://opencode.ai/zen)) report their own
-upstream connection failure as the stream's terminal `finish_reason` instead of
-an HTTP/transport error. As of dsh `0.1.1-rc.2` both adapter paths
-mis-classify it:
+## 背景
 
-| Path | Failure produced | Stock classification |
+一些 OpenAI 兼容网关（如 [OpenCode Zen](https://opencode.ai/zen)）把自身上游连接的瞬时失败
+作为流的终止 `finish_reason` 上报，而不是走 HTTP/传输层错误。截至 dsh `0.1.1-rc.2`，两条
+adapter 路径都把它误分类：
+
+| 路径 | 产出的失败 | 原生分类 |
 |---|---|---|
-| `llm-pi-ai` (`openai-completions`) | `Provider finish_reason: network_error` | `PI_AI_ERROR` — not retryable |
-| `llm-deepseek` | `model stopped: network_error`, code `NETWORK_ERROR` | not retryable |
+| `llm-pi-ai`（`openai-completions`） | `Provider finish_reason: network_error` | `PI_AI_ERROR`——不可重试 |
+| `llm-deepseek` | `model stopped: network_error`，code `NETWORK_ERROR` | 不可重试 |
 
-`dsh-llm-retry` only retries codes in the provider's `retryableCodes`
-(`TRANSPORT`, `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `EMPTY_RESPONSE`), so nobody
-retries and the turn — including subagent turns — fails outright. Retrying
-immediately almost always succeeds; these are transient gateway-side drops.
+`dsh-llm-retry` 只重试 provider `retryableCodes` 里的码（`TRANSPORT`、`RATE_LIMIT`、`SERVER`、
+`TIMEOUT`、`EMPTY_RESPONSE`），于是没人重试，turn——包括 subagent turn——直接失败。
+而这类故障立即重试几乎总能成功。
 
-opencode fixed the same behavior upstream in
-[40282c1](https://github.com/anomalyco/opencode/commit/40282c1d4d5476e6b536a72c0baf3a27bcf0e4df)
-and
-[e0b9e68](https://github.com/anomalyco/opencode/commit/e0b9e68a68a8bc8367d84e305efd114d0445348a).
+opencode 在上游修过同样的问题：
+[40282c1](https://github.com/anomalyco/opencode/commit/40282c1d4d5476e6b536a72c0baf3a27bcf0e4df)、
+[e0b9e68](https://github.com/anomalyco/opencode/commit/e0b9e68a68a8bc8367d84e305efd114d0445348a)。
 
-A fix for the dsh base is prepared on
-[`fix/network-error-retryable`](https://github.com/fan56/deepseek-harness/tree/fix/network-error-retryable)
-(fork; dsh does not accept external PRs at the moment — reported in
-Discussions). Until it ships, this plugin is the remedy, and it stays harmless
-afterwards: it only acts when the whole `agent/request-error` waterfall has
-declined, and it never touches llm-retry's own retry counting.
+dsh 本体的修复已备好并充分测试（fork 分支
+[`fix/network-error-retryable`](https://github.com/fan56/deepseek-harness/tree/fix/network-error-retryable)；
+dsh 目前不接受外部 PR，已按官方渠道报告至
+[Discussions #3949](https://github.com/deepseek-ai/deepseek-harness/discussions/3949)）。
+在修复合入前，本插件就是解决方案；合入后它也无害：只在整个 `agent/request-error`
+waterfall 弃权时才行动，且绝不触碰 llm-retry 自身的重试计数。
 
-## How it works
+## 工作原理
 
-The plugin listens at the **end** of the `agent/request-error` waterfall:
+插件挂在 `agent/request-error` waterfall 的**末端**：
 
-1. Call `next()` first — the provider's policy executors (`dsh-llm-retry`)
-   decide. If any of them retries, that decision passes through unchanged.
-2. Only when every listener declined and the failure message names a leaked
-   network variant — `network_error` / `network-error` / `network error`, or
-   pi-ai's `Provider finish_reason:` rendering of an unrecognized gateway stop
-   reason — schedule this plugin's own bounded retry.
-3. Retries are durable and visible: `llm/retry` / `llm/retry-started` session
-   events, schema-compatible with llm-retry's, so TUI surfaces render them
-   unchanged. Counting uses this plugin's own policy key (`net-retry:v1…`),
-   never llm-retry's.
+1. 先调用 `next()`——provider 的策略执行器（`dsh-llm-retry`）先决策。任何一方决定重试，
+   该决策原样透传。
+2. 只有当所有 listener 都弃权，且失败消息命中漏网的 network 变体——`network_error` /
+   `network-error` / `network error`，或 pi-ai 对未识别网关 stop reason 的
+   `Provider finish_reason:` 渲染——才调度本插件自己的有界重试。
+3. 重试持久化且可见：`llm/retry` / `llm/retry-started` session 事件，schema 与 llm-retry
+   兼容，TUI 无需改动即可展示。计数使用本插件自己的 policy key（`net-retry:v1…`），
+   绝不污染 llm-retry 的计数。
 
-Failures already classified as `TRANSPORT` (ECONNRESET, `terminated`,
-stream truncation, timeouts, HTTP 5xx) are retried by the stock policy and are
-deliberately not matched again here.
+已被分类为 `TRANSPORT` 的失败（ECONNRESET、`terminated`、流截断、超时、HTTP 5xx）由原生
+策略重试，本插件刻意不再重复匹配。
 
-## Install
+## 安装
 
 ```bash
-# inside a dsh profile with the plugin loader
-npm install @aiwayds/dsh-llm-net-retry
+dsh plugin --profile tui add @aiwayds/dsh-llm-net-retry
 ```
 
-The `cordis.patch.yml` in this package mounts it under the plugin id
-`dsh-llm-net-retry`.
+包内的 `cordis.patch.yml` 会以插件 id `dsh-llm-net-retry` 挂载。
 
-> ⚠️ All `@deepseek-ai/*` packages are peerDependencies (resolved from the dsh
-> closure) — never install them into the plugin as regular dependencies, or
-> you get a second cordis closure and cryptic crashes.
+> ⚠️ 所有 `@deepseek-ai/*` 包都是 peerDependencies（由 dsh 闭包解析）——绝不要把它们当普通
+> dependencies 装进插件，否则会出现第二份 cordis 闭包和诡异的崩溃。
 
-## Configuration
+## 配置
 
 ```yaml
-plugins:
-  dsh-llm-net-retry:
-    mode: on            # 'off' disables the listener entirely
-    maxRetries: 5
-    backoff:
-      initialDelayMs: 500
-      maxDelayMs: 10000
-      jitterRatio: 0.1
+dsh-llm-net-retry:
+  mode: on            # 'off' 完全摘除 listener
+  maxRetries: 5
+  backoff:
+    initialDelayMs: 500
+    maxDelayMs: 10000
+    jitterRatio: 0.1
 ```
 
-Unknown keys are rejected. Defaults match llm-retry's stock policy
-(5 retries, 500 ms → 10 s exponential backoff, symmetric jitter 0.1).
+（`~/.dsh/settings.yaml` 里按插件 id 加段，与其他插件同机制。）
 
-## Verification
+未知 key 报错。默认值对齐 llm-retry 原生策略（5 次重试、500 ms→10 s 指数退避、对称抖动 0.1）。
 
-- Unit tests: matcher table (positive/negative), backoff math with injected
-  random, config validation, and the decision chain on a real cordis context
-  with a real session store (passthrough, retry, counting, abort, mode off,
-  downstream-error resilience).
-- End-to-end: the real agent loop + the real `llm-pi-ai`
-  `openai-completions` adapter against a scripted local gateway that answers
-  the first two requests with `finish_reason: "network_error"` — the turn
-  completes on the third request with `llm/retry` events recorded, while the
-  negative control (plugin absent) fails after exactly one request.
+## 验证
+
+- 单测：匹配表（正/负例）、注入随机数的退避计算、配置校验、真实 cordis context 上的决策链
+  （透传/重试/计数/abort/mode off/下游异常韧性）。
+- e2e：真实 agent loop + 真实 `llm-pi-ai` `openai-completions` adapter，打脚本化本地网关
+  （前两次请求回 `finish_reason: "network_error"`）——第三次请求完成 turn、`llm/retry`
+  事件落盘；负向对照（无插件）一次请求后 turn 即硬失败。
+- 真实宿主：已在 dsh 0.1.0-rc.8 的 `--profile tui`（dsh-tui-pi）上实测，重试链
+  （指数退避、稳定 retryId、事件落盘、TUI 展示）全部正确。
 
 ```bash
-npm test        # builds first: npm run build
+npm test        # 先构建：npm run build
 ```
 
-The e2e suite runs in an isolated temp `$HOME` and never touches `~/.dsh`.
+e2e 在隔离的临时 `$HOME` 下运行，绝不触碰 `~/.dsh`。
 
-## Compatibility
+## 兼容性
 
-Targets the `agent/request-error` waterfall and `llm/retry` event schema of
-dsh `0.1.1-rc.x`. The plugin is read-only with respect to the dsh base: no
-monkey-patching, no service replacement — dispose removes it cleanly.
+面向 dsh `0.1.1-rc.x` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema。插件对
+dsh 本体零侵入：无 monkey-patch、不替换服务，dispose 即干净移除。
 
-## License
+## 许可证
 
 MIT
