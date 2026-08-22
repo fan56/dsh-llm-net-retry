@@ -1,0 +1,8 @@
+# dsh-llm-net-retry bundle patch: mounts the plugin into the profile's
+# assembly tree under the stable plugin id `dsh-llm-net-retry`. On the
+# agent/request-error waterfall it sits behind the provider retry policy
+# executor and retries network failures that policy could not classify.
+
+- insert:
+    - id: dsh-llm-net-retry
+      name: '@aiwayds/dsh-llm-net-retry'
