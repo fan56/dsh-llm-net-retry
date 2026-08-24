@@ -1,6 +1,6 @@
 {
   "name": "@aiwayds/dsh-llm-net-retry",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "dsh plugin: bounded retry for gateway network_error failures the stock retry policy cannot classify (e.g. OpenCode Zen finish_reason: network_error)",
   "type": "module",
   "main": "lib/index.js",
