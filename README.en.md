@@ -57,12 +57,17 @@ deliberately not matched again here.
 
 ## Install
 
+This is a standalone dsh plugin, independent of any host UI: install it into
+**any dsh profile** (replace `<profile>` with your profile name — profiles are
+created and managed by the `dsh` CLI, not tied to the TUI):
+
 ```bash
-dsh plugin --profile tui add @aiwayds/dsh-llm-net-retry
+dsh plugin --profile <profile> add @aiwayds/dsh-llm-net-retry
 ```
 
 The `cordis.patch.yml` in this package mounts it under the plugin id
-`dsh-llm-net-retry`.
+`dsh-llm-net-retry`; it takes effect for every dsh instance started from the
+profile it is installed into (TUI, web, or a custom launcher).
 
 > ⚠️ All `@deepseek-ai/*` packages are peerDependencies (resolved from the dsh
 > closure) — never install them into the plugin as regular dependencies, or

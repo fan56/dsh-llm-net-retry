@@ -50,11 +50,15 @@ waterfall 弃权时才行动，且绝不触碰 llm-retry 自身的重试计数�
 
 ## 安装
 
+本插件是独立的 dsh 插件，与宿主 UI 无关：装入**任意 dsh profile** 即可（把 `<profile>`
+换成你的 profile 名——profile 由 `dsh` CLI 自建自管，不是 tui 专属）：
+
 ```bash
-dsh plugin --profile tui add @aiwayds/dsh-llm-net-retry
+dsh plugin --profile <profile> add @aiwayds/dsh-llm-net-retry
 ```
 
-包内的 `cordis.patch.yml` 会以插件 id `dsh-llm-net-retry` 挂载。
+包内的 `cordis.patch.yml` 会以插件 id `dsh-llm-net-retry` 挂载，挂在哪个 profile，
+就对哪个 profile 启动的 dsh 实例生效（tui / web / 自定义 launcher 均可）。
 
 > ⚠️ 所有 `@deepseek-ai/*` 包都是 peerDependencies（由 dsh 闭包解析）——绝不要把它们当普通
 > dependencies 装进插件，否则会出现第二份 cordis 闭包和诡异的崩溃。
