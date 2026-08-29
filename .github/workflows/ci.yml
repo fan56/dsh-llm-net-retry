@@ -32,6 +32,10 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
+      # Tests import lib/, so the build must run before them.
+      - name: Build
+        run: npm run build --if-present
+
       - name: Check
         run: npm run check --if-present
 
