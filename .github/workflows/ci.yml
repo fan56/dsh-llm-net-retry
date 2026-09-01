@@ -1,10 +1,21 @@
-# CI: typecheck + tests on every push to main and every pull request.
+# CI: typecheck + tests + a real-host boot smoke on every push to main, every
+# pull request, and a daily schedule.
+#
+# The dsh host is installed from the npm `alpha` dist-tag — never hand-pinned
+# (the rc.2 lesson: a hand-pinned host went stale and rotted the gate). The
+# linker (scripts/link-dsh-closure.mjs) then re-points every
+# node_modules/@deepseek-ai/* entry at that install's closure, so check, test,
+# and smoke run against the real host's own copies — one cordis instance, one
+# type graph. The daily schedule catches upstream alpha drift without a push.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Daily 03:47 UTC.
+    - cron: '47 3 * * *'
 
 permissions:
   contents: read
@@ -15,7 +26,7 @@ concurrency:
 
 jobs:
   test:
-    name: Check & Test
+    name: Check, Test & Boot-Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -29,8 +40,24 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
+      # The dsh host drives profile/bundle installation through pnpm
+      # (dsh bin.js forwards `dsh plugin` to it), and the boot smoke
+      # initializes the scratch profile with it.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Install dsh host (rolling alpha dist-tag)
+        run: npm install -g @deepseek-ai/dsh@alpha --no-audit --no-fund
+
+      # Re-point node_modules/@deepseek-ai/* at the installed host's closure
+      # so typecheck and tests resolve the exact copies the host ships.
+      - name: Link the dsh closure
+        run: node scripts/link-dsh-closure.mjs
 
       # Tests import lib/, so the build must run before them.
       - name: Build
@@ -41,3 +68,6 @@ jobs:
 
       - name: Test
         run: npm test
+
+      - name: Boot smoke (real dsh host, scratch profile)
+        run: node scripts/smoke-boot.mjs
