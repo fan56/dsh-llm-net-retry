@@ -16,6 +16,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import * as Retry from '@deepseek-ai/dsh-llm-retry'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import * as NetRetry from '../lib/index.js'
 
 /** A gateway stop chunk reporting its own upstream connection failure. */
@@ -68,6 +69,9 @@ function startGateway(failures) {
 async function harness(gatewayURL, netRetryConfig) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
+  // alpha.3 AgentLoop additionally injects `sessionProjections`; the testkit
+  // deliberately leaves it (and AgentLoop itself) to the caller.
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(LlmPiAi, {
     providers: {
       mockgw: {
