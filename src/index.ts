@@ -251,7 +251,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
     if (lifetime.signal.aborted || signal.aborted) return
     if (!isLeakedNetworkFailure(failure.message)) return
 
-    const priorNetRetry = agent.session.events.findLast((event): event is SessionEvent<'llm/retry'> =>
+    const priorNetRetry = agent.session.snapshotEvents().findLast((event): event is SessionEvent<'llm/retry'> =>
       event.type === 'llm/retry'
       && event.data.turn === turn
       && event.data.step === step

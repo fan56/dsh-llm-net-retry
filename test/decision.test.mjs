@@ -39,9 +39,9 @@ function dispatch(ctx, agent, failure, next) {
 }
 
 const retryEvents = session =>
-  session.events.filter(event => event.type === 'llm/retry')
+  session.snapshotEvents().filter(event => event.type === 'llm/retry')
 const startedEvents = session =>
-  session.events.filter(event => event.type === 'llm/retry-started')
+  session.snapshotEvents().filter(event => event.type === 'llm/retry-started')
 
 test('retries a leaked network failure every downstream listener declined', async () => {
   const { ctx, session, agent } = await setup()

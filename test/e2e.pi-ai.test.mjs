@@ -119,14 +119,14 @@ test('e2e: retries two gateway network_error finishes and completes the turn', a
     assert.equal(gateway.requestCount, 3, 'two failures plus the successful third request')
     assert.equal(finalAssistantText(agent), 'recovered via net-retry')
 
-    const retryEvents = agent.session.events.filter(event => event.type === 'llm/retry')
+    const retryEvents = agent.session.snapshotEvents().filter(event => event.type === 'llm/retry')
     assert.deepEqual(retryEvents.map(event => event.data.retry), [1, 2])
     for (const event of retryEvents) {
       assert.equal(event.data.provider, 'mockgw')
       assert.equal(event.data.failure.message, 'Provider finish_reason: network_error')
       assert.ok(event.data.policyKey.includes('net-retry:v1'), event.data.policyKey)
     }
-    const started = agent.session.events.filter(event => event.type === 'llm/retry-started')
+    const started = agent.session.snapshotEvents().filter(event => event.type === 'llm/retry-started')
     assert.deepEqual(started.map(event => event.data.retry), [1, 2])
     assert.equal(new Set(retryEvents.map(event => event.data.retryId)).size, 1)
   } finally {
@@ -147,7 +147,7 @@ test('e2e negative control: without the plugin the first network_error fails the
 
     assert.equal(gateway.requestCount, 1, 'the stock policy does not retry the misclassified failure')
     assert.equal(finalAssistantText(agent), undefined)
-    assert.equal(agent.session.events.filter(event => event.type === 'llm/retry').length, 0)
+    assert.equal(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').length, 0)
   } finally {
     await ctx.fiber.dispose()
     await gateway.close()
