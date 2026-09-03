@@ -1,12 +1,15 @@
 # CI: typecheck + tests + a real-host boot smoke on every push to main, every
 # pull request, and a daily schedule.
 #
-# The dsh host is installed from the npm `alpha` dist-tag — never hand-pinned
-# (the rc.2 lesson: a hand-pinned host went stale and rotted the gate). The
-# linker (scripts/link-dsh-closure.mjs) then re-points every
+# The dsh host is installed from the rolling rc/stable line — CI resolves the
+# newest of the `latest` (stable) and `next` (rc) dist-tags at runtime, never
+# hand-pinned (the rc.2 lesson: a hand-pinned host went stale and rotted the
+# gate) and never alpha (the alpha line is retired for CI by policy,
+# 2026-09-03). The linker (scripts/link-dsh-closure.mjs) then re-points every
 # node_modules/@deepseek-ai/* entry at that install's closure, so check, test,
 # and smoke run against the real host's own copies — one cordis instance, one
-# type graph. The daily schedule catches upstream alpha drift without a push.
+# type graph. The daily schedule catches upstream rc/stable drift without a
+# push.
 name: CI
 
 on:
@@ -51,8 +54,20 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Install dsh host (rolling alpha dist-tag)
-        run: npm install -g @deepseek-ai/dsh@alpha --no-audit --no-fund
+      - name: Install dsh CLI (rolling rc/stable line — newest of latest/next, never alpha)
+        run: |
+          # Policy (2026-09-03): the alpha line is retired for CI. Resolve the
+          # newest of the `latest` (stable) and `next` (rc) dist-tags at
+          # runtime, never hand-pinned — when a stable 0.1.2+ lands on
+          # `latest` it wins over the rc by plain semver compare.
+          STABLE="$(npm view @deepseek-ai/dsh@latest version)"
+          RC="$(npm view @deepseek-ai/dsh@next version 2>/dev/null || true)"
+          DSH_VERSION="$STABLE"
+          if [ -n "$RC" ] && [ "$(printf '%s\n' "$STABLE" "$RC" | sort -V | tail -1)" = "$RC" ]; then
+            DSH_VERSION="$RC"
+          fi
+          echo "dsh closure: ${DSH_VERSION}"
+          npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" --no-audit --no-fund
 
       # Re-point node_modules/@deepseek-ai/* at the installed host's closure
       # so typecheck and tests resolve the exact copies the host ships.
