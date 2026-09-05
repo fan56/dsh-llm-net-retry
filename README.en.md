@@ -74,6 +74,14 @@ profile it is installed into (TUI, web, or a custom launcher).
 > closure) — never install them into the plugin as regular dependencies, or
 > you get a second cordis closure and cryptic crashes.
 
+## Uninstall
+
+```bash
+dsh plugin --profile <profile> remove @aiwayds/dsh-llm-net-retry
+```
+
+The host reconciles the profile automatically: the `dsh.profile.bundles` entry is spliced out and the package's patch layer drops. The plugin keeps **zero on-disk state** — no data files, no settings namespace — so removal leaves nothing behind (see "dispose removes it cleanly" in the Compatibility section). Historical `llm/retry` events already recorded in old session logs are untouched — benign host data, not plugin state.
+
 ## Configuration
 
 ```yaml

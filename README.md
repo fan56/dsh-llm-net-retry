@@ -63,6 +63,17 @@ dsh plugin --profile <profile> add @aiwayds/dsh-llm-net-retry
 > ⚠️ 所有 `@deepseek-ai/*` 包都是 peerDependencies（由 dsh 闭包解析）——绝不要把它们当普通
 > dependencies 装进插件，否则会出现第二份 cordis 闭包和诡异的崩溃。
 
+## 卸载
+
+```bash
+dsh plugin --profile <profile> remove @aiwayds/dsh-llm-net-retry
+```
+
+宿主自动清掉 profile `bundles` 里对应的条目和插件的 patch 层。本插件**零落盘状态**——
+没有数据文件，也不占用 settings 命名空间——卸载后不留任何残留（见「兼容性」一节的
+「dispose 即干净移除」）。旧会话日志里历史留下的 `llm/retry` 事件不受影响——那是宿主
+自己的良性数据，不属于本插件。
+
 ## 配置
 
 ```yaml
