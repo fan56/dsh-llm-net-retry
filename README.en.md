@@ -84,15 +84,22 @@ The host reconciles the profile automatically: the `dsh.profile.bundles` entry i
 
 ## Configuration
 
+All options are optional — defaults work out of the box. The plugin uses **no
+settings namespace**: configuration rides the composition entry config, i.e.
+the `config:` block of the mount entry in the patch layer (the profile's
+`cordis.patch.yml`):
+
 ```yaml
-plugins:
-  dsh-llm-net-retry:
-    mode: on            # 'off' disables the listener entirely
-    maxRetries: 5
-    backoff:
-      initialDelayMs: 500
-      maxDelayMs: 10000
-      jitterRatio: 0.1
+- insert:
+    - id: dsh-llm-net-retry
+      name: '@aiwayds/dsh-llm-net-retry'
+      config:
+        mode: on            # 'off' disables the listener entirely
+        maxRetries: 5
+        backoff:
+          initialDelayMs: 500
+          maxDelayMs: 10000
+          jitterRatio: 0.1
 ```
 
 Unknown keys are rejected. Defaults match llm-retry's stock policy

@@ -76,17 +76,21 @@ dsh plugin --profile <profile> remove @aiwayds/dsh-llm-net-retry
 
 ## 配置
 
-```yaml
-dsh-llm-net-retry:
-  mode: on            # 'off' 完全摘除 listener
-  maxRetries: 5
-  backoff:
-    initialDelayMs: 500
-    maxDelayMs: 10000
-    jitterRatio: 0.1
-```
+全部可选，默认即用。本插件**不占用 settings 命名空间**——配置走组合树 entry config，
+即在 patch 层（profile 的 `cordis.patch.yml`）的挂载条目里给 `config:` 段：
 
-（`~/.dsh/settings.yaml` 里按插件 id 加段，与其他插件同机制。）
+```yaml
+- insert:
+    - id: dsh-llm-net-retry
+      name: '@aiwayds/dsh-llm-net-retry'
+      config:
+        mode: on            # 'off' 完全摘除 listener
+        maxRetries: 5
+        backoff:
+          initialDelayMs: 500
+          maxDelayMs: 10000
+          jitterRatio: 0.1
+```
 
 未知 key 报错。默认值对齐 llm-retry 原生策略（5 次重试、500 ms→10 s 指数退避、对称抖动 0.1）。
 
