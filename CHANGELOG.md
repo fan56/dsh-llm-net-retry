@@ -7,6 +7,13 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Documentation-only: the Configuration sections of both READMEs described a config carrier that does not exist in code (zh claimed a top-level `dsh-llm-net-retry:` section in settings.yaml "same mechanism as other plugins"; en claimed a `plugins: dsh-llm-net-retry:` nesting — the two contradicted each other). Both now document the real carrier: the composition entry config, set via the `config:` block of the mount entry in the patch layer (same form dsh-llm-stats documents). No code change; no release.
 
+## [Unreleased]
+
+### Changed
+- **dsh closure moved to 0.1.5-rc.1** (dev pins, locks).
+- **CI tests run with `--test-force-exit`** so a failing test's unclosed gateway server can no longer hang the Test step; the e2e harness drops its redundant SessionProjections plugin (the 0.1.5 testkit mounts it) and awaits the now-async `agentLoop.create()`.
+
+
 ## [0.3.1] - 2026-09-05
 
 ### Changed
