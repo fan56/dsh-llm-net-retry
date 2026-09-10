@@ -16,7 +16,6 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import * as Retry from '@deepseek-ai/dsh-llm-retry'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import * as NetRetry from '../lib/index.js'
 
 /** A gateway stop chunk reporting its own upstream connection failure. */
@@ -69,9 +68,9 @@ function startGateway(failures) {
 async function harness(gatewayURL, netRetryConfig) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  // alpha.3 AgentLoop additionally injects `sessionProjections`; the testkit
-  // deliberately leaves it (and AgentLoop itself) to the caller.
-  await ctx.plugin(SessionProjections)
+  // dsh 0.1.5-rc.1: the testkit now mounts SessionProjectionRegistry itself
+  // (providing `sessionProjections`) — plugging SessionProjections here again
+  // throws "service has been registered". AgentLoop stays caller-supplied.
   await ctx.plugin(LlmPiAi, {
     providers: {
       mockgw: {
@@ -110,7 +109,7 @@ test('e2e: retries two gateway network_error finishes and completes the turn', a
   const gateway = await startGateway(2)
   const ctx = await harness(gateway.url, { maxRetries: 3, backoff: { initialDelayMs: 5, maxDelayMs: 5, jitterRatio: 0 } })
   try {
-    const agent = ctx.agentLoop.create(SessionId('e2e-net-retry'), {
+    const agent = await ctx.agentLoop.create(SessionId('e2e-net-retry'), {
       provider: 'mockgw',
       model: 'ox-alpha-free',
     })
@@ -139,7 +138,7 @@ test('e2e negative control: without the plugin the first network_error fails the
   const gateway = await startGateway(1)
   const ctx = await harness(gateway.url, null)
   try {
-    const agent = ctx.agentLoop.create(SessionId('e2e-net-retry-off'), {
+    const agent = await ctx.agentLoop.create(SessionId('e2e-net-retry-off'), {
       provider: 'mockgw',
       model: 'ox-alpha-free',
     })

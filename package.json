@@ -30,7 +30,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test test/match.test.mjs test/backoff.test.mjs test/decision.test.mjs && node --test test/e2e.pi-ai.test.mjs",
+    "test": "node --test --test-force-exit test/match.test.mjs test/backoff.test.mjs test/decision.test.mjs && node --test --test-force-exit test/e2e.pi-ai.test.mjs",
     "smoke": "node scripts/smoke-boot.mjs"
   },
   "peerDependencies": {
