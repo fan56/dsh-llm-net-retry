@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Documentation-only: the Configuration sections of both READMEs described a config carrier that does not exist in code (zh claimed a top-level `dsh-llm-net-retry:` section in settings.yaml "same mechanism as other plugins"; en claimed a `plugins: dsh-llm-net-retry:` nesting — the two contradicted each other). Both now document the real carrier: the composition entry config, set via the `config:` block of the mount entry in the patch layer (same form dsh-llm-stats documents). No code change; no release.
 
-## [Unreleased]
+## [0.4.0] - 2026-09-11
 
 ### Changed
 - dsh closure 升至 0.1.5-rc.2（dev pins、locks、peer floor、README support floor；rc.2 无 API/协议变化，纯依赖跟进）。
