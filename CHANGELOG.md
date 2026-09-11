@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- dsh closure 升至 0.1.5-rc.2（dev pins、locks、peer floor、README support floor；rc.2 无 API/协议变化，纯依赖跟进）。
 - **dsh closure moved to 0.1.5-rc.1** (dev pins, locks).
 - **CI tests run with `--test-force-exit`** so a failing test's unclosed gateway server can no longer hang the Test step; the e2e harness drops its redundant SessionProjections plugin (the 0.1.5 testkit mounts it) and awaits the now-async `agentLoop.create()`.
 

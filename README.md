@@ -9,7 +9,7 @@
 ## 背景
 
 一些 OpenAI 兼容网关（如 [OpenCode Zen](https://opencode.ai/zen)）把自身上游连接的瞬时失败
-作为流的终止 `finish_reason` 上报，而不是走 HTTP/传输层错误。在 dsh `0.1.5-rc.1`（本插件
+作为流的终止 `finish_reason` 上报，而不是走 HTTP/传输层错误。在 dsh `0.1.5-rc.2`（本插件
 跟随的 rc/stable 线；alpha 线已退役）中，两条 adapter 路径仍把它误分类：
 
 | 路径 | 产出的失败 | 原生分类 |
@@ -112,9 +112,9 @@ e2e 在隔离的临时 `$HOME` 下运行，绝不触碰 `~/.dsh`。
 
 ## 兼容性
 
-**要求 dsh >= 0.1.5-rc.1** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
+**要求 dsh >= 0.1.5-rc.2** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
 
-面向 dsh `>=0.1.5-rc.1` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema。插件对
+面向 dsh `>=0.1.5-rc.2` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema。插件对
 dsh 本体零侵入：无 monkey-patch、不替换服务，dispose 即干净移除。
 
 ## 许可证

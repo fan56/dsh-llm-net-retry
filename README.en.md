@@ -11,7 +11,7 @@ classify and therefore lets hard-fail the whole turn.
 
 Some gateways (e.g. [OpenCode Zen](https://opencode.ai/zen)) report their own
 upstream connection failure as the stream's terminal `finish_reason` instead of
-an HTTP/transport error. On dsh `0.1.5-rc.1` (the rc/stable line this plugin
+an HTTP/transport error. On dsh `0.1.5-rc.2` (the rc/stable line this plugin
 tracks; the alpha line is retired) both adapter paths
 still mis-classify it:
 
@@ -128,10 +128,10 @@ events, TUI rendering) behaved exactly as designed.
 
 ## Compatibility
 
-**Requires dsh >= 0.1.5-rc.1** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
+**Requires dsh >= 0.1.5-rc.2** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
 
 Targets the `agent/request-error` waterfall and `llm/retry` event schema of
-dsh `>=0.1.5-rc.1`. The plugin is read-only with respect to the dsh base: no
+dsh `>=0.1.5-rc.2`. The plugin is read-only with respect to the dsh base: no
 monkey-patching, no service replacement — dispose removes it cleanly.
 
 ## License
