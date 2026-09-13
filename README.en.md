@@ -3,22 +3,24 @@
 [中文](README.md)
 
 A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh)
-plugin that retries model-request failures OpenAI-compatible gateways report as
-`finish_reason: "network_error"` — failures the stock retry policy cannot
+plugin that retries transient model-request failures OpenAI-compatible gateways
+report in non-standard wordings — failures the stock retry policy cannot
 classify and therefore lets hard-fail the whole turn.
 
 ## Why
 
-Some gateways (e.g. [OpenCode Zen](https://opencode.ai/zen)) report their own
-upstream connection failure as the stream's terminal `finish_reason` instead of
-an HTTP/transport error. On dsh `0.1.5-rc.2` (the rc/stable line this plugin
-tracks; the alpha line is retired) both adapter paths
-still mis-classify it:
+Some gateways (e.g. [OpenCode Zen](https://opencode.ai/zen)) relay their own
+upstream connection failure to the client (as the stream's terminal
+`finish_reason`, echoed error payloads, …) instead of an HTTP/transport error.
+On dsh `0.1.5-rc.2` (the rc/stable line this plugin tracks; the alpha line is
+retired) those wordings are still mis-classified:
 
 | Path | Failure produced | Stock classification |
 |---|---|---|
 | `llm-pi-ai` (`openai-completions`) | `Provider finish_reason: network_error` | `PI_AI_ERROR` — not retryable |
 | `llm-deepseek` | `model stopped: network_error`, code `NETWORK_ERROR` | not retryable |
+| `llm-pi-ai` (gateway-echoed upstream error text, [#4361](https://github.com/deepseek-ai/deepseek-harness/discussions/4361)) | `unexpected EOF` / `remote error: tls: bad record MAC` | `PI_AI_ERROR` — not retryable |
+| `llm-pi-ai` ([#3158](https://github.com/deepseek-ai/deepseek-harness/discussions/3158)) | `stream_read_error` | `PI_AI_ERROR` — not retryable |
 
 `dsh-llm-retry` only retries codes in the provider's `retryableCodes`
 (`TRANSPORT`, `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `EMPTY_RESPONSE`), so nobody
@@ -33,9 +35,13 @@ and
 A fix for the dsh base is prepared on
 [`fix/network-error-retryable`](https://github.com/fan56/deepseek-harness/tree/fix/network-error-retryable)
 (fork; dsh does not accept external PRs at the moment — reported in
-Discussions). Until it ships, this plugin is the remedy, and it stays harmless
-afterwards: it only acts when the whole `agent/request-error` waterfall has
-declined, and it never touches llm-retry's own retry counting.
+Discussions). The same failure family keeps receiving new upstream reports
+since ([#3158](https://github.com/deepseek-ai/deepseek-harness/discussions/3158),
+[#4361](https://github.com/deepseek-ai/deepseek-harness/discussions/4361) and its
+2026-09-13 follow-up) with no fix landed. Until it ships, this plugin is the
+remedy, and it stays harmless afterwards: it only acts when the whole
+`agent/request-error` waterfall has declined AND the failure sits outside the
+stock taxonomy, and it never touches llm-retry's own retry counting.
 
 ## How it works
 
@@ -43,18 +49,30 @@ The plugin listens at the **end** of the `agent/request-error` waterfall:
 
 1. Call `next()` first — the provider's policy executors (`dsh-llm-retry`)
    decide. If any of them retries, that decision passes through unchanged.
-2. Only when every listener declined and the failure message names a leaked
-   network variant — `network_error` / `network-error` / `network error`, or
-   pi-ai's `Provider finish_reason:` rendering of an unrecognized gateway stop
-   reason — schedule this plugin's own bounded retry.
+2. Only when every listener declined and the failure sits in the stock
+   classifier's blind spot (message AND code, see below) schedule this
+   plugin's own bounded retry. Message-side coverage: `network_error` /
+   `network-error` / `network error`; pi-ai's `Provider finish_reason:`
+   rendering of an unrecognized gateway stop reason; the gateway-echoed
+   transport wordings `unexpected EOF` (including the `HPE_UNEXPECTED_EOF…`
+   and zlib `unexpected end of file` variants), `remote error: tls: bad
+   record MAC`, and `stream_read_error`.
 3. Retries are durable and visible: `llm/retry` / `llm/retry-started` session
    events, schema-compatible with llm-retry's, so TUI surfaces render them
    unchanged. Counting uses this plugin's own policy key (`net-retry:v1…`),
    never llm-retry's.
 
-Failures already classified as `TRANSPORT` (ECONNRESET, `terminated`,
-stream truncation, timeouts, HTTP 5xx) are retried by the stock policy and are
-deliberately not matched again here.
+**Code guard**: codes whose recovery the harness already owns are declined
+even when the message matches — the stock policy's default retryable set
+(`EMPTY_RESPONSE` / `RATE_LIMIT` / `SERVER` / `TIMEOUT` / `TRANSPORT`) belongs
+to the stock policy (including its decision to stop retrying), and permanent
+failures (`AUTH`, `INVALID_REQUEST`, `QUOTA`, …) or caller aborts (`ABORTED`)
+cannot be fixed by a retry. Everything else — the `PI_AI_ERROR` catch-all,
+DeepSeek's unknown-reason codes, raw-throw `UNKNOWN`, oddball
+`HTTP_<status>` codes — falls through to the message patterns. This also
+means the net stands down automatically once upstream reclassifies a wording
+(e.g. as `TRANSPORT`): the stock policy takes over and no second retry budget
+is stacked behind the user's back.
 
 ## Install
 
@@ -107,15 +125,20 @@ Unknown keys are rejected. Defaults match llm-retry's stock policy
 
 ## Verification
 
-- Unit tests: matcher table (positive/negative), backoff math with injected
-  random, config validation, and the decision chain on a real cordis context
-  with a real session store (passthrough, retry, counting, abort, mode off,
+- Unit tests: matcher table (positive/negative × failure codes, the code
+  guard, near-miss spellings), backoff math with injected random, config
+  validation, and the decision chain on a real cordis context with a real
+  session store (passthrough, retry, counting, abort, mode off,
   downstream-error resilience).
 - End-to-end: the real agent loop + the real `llm-pi-ai`
   `openai-completions` adapter against a scripted local gateway that answers
-  the first two requests with `finish_reason: "network_error"` — the turn
-  completes on the third request with `llm/retry` events recorded, while the
+  the first two requests with `finish_reason: "network_error"` (plus a leg
+  with the relay-echo shape `finish_reason: "unexpected EOF"`) — the turn
+  completes after the retries with `llm/retry` events recorded, while the
   negative control (plugin absent) fails after exactly one request.
+- Integration check: the real classifier output of the locally installed dsh
+  `0.1.5-rc.2` is the baseline — every covered wording is asserted to be
+  classified `PI_AI_ERROR` there and claimed by this net.
 
 ```bash
 npm test        # builds first: npm run build

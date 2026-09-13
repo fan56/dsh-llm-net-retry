@@ -4,9 +4,10 @@
  *
  * Sits at the END of the `agent/request-error` waterfall: it first lets the
  * provider's policy executors (dsh-llm-retry) decide, and only when every one
- * of them declined (`next()` resolved undefined) AND the failure message names
- * a leaked network variant does it schedule its own bounded retry. Retries
- * are durable (`llm/retry` / `llm/retry-started` session events, schema- and
+ * of them declined (`next()` resolved undefined) AND the failure names a
+ * leaked network variant outside the stock taxonomy (message pattern + code
+ * guard, see match.ts) does it schedule its own bounded retry. Retries are
+ * durable (`llm/retry` / `llm/retry-started` session events, schema- and
  * shape-compatible with dsh-llm-retry's, so TUI surfaces them unchanged) and
  * counted under this plugin's own policy key, never touching llm-retry's.
  *
@@ -249,7 +250,7 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
       return downstream.decision
     }
     if (lifetime.signal.aborted || signal.aborted) return
-    if (!isLeakedNetworkFailure(failure.message)) return
+    if (!isLeakedNetworkFailure(failure.message, failure.code)) return
 
     const priorNetRetry = agent.session.snapshotEvents().findLast((event): event is SessionEvent<'llm/retry'> =>
       event.type === 'llm/retry'

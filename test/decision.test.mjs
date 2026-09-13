@@ -161,3 +161,43 @@ test('a downstream recovery error still reaches the net', async () => {
     await ctx.fiber.dispose()
   }
 })
+
+test('retries the #4361/#3158 leak wordings the stock classifier misses', async () => {
+  for (const failure of [
+    { message: 'unexpected EOF', code: 'PI_AI_ERROR' },
+    { message: 'remote error: tls: bad record MAC', code: 'PI_AI_ERROR' },
+    { message: 'stream_read_error', code: 'PI_AI_ERROR' },
+  ]) {
+    const { ctx, session, agent } = await setup()
+    try {
+      const decision = await dispatch(ctx, agent, failure)
+      assert.deepEqual(decision, { kind: 'retry' }, failure.message)
+      const events = retryEvents(session)
+      assert.equal(events.length, 1, failure.message)
+      assert.equal(events[0].data.failure.message, failure.message)
+      assert.equal(events[0].data.failure.code, failure.code)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  }
+})
+
+test('stands down when the code is one the stock policy owns, even on a match', async () => {
+  const { ctx, session, agent } = await setup()
+  try {
+    // The future-proofing shape: upstream reclassifies the wording (or a user
+    // narrows retryableCodes) so the stock policy owns the recovery.
+    for (const failure of [
+      { message: 'unexpected EOF', code: 'TRANSPORT' },
+      { message: 'Provider finish_reason: network_error', code: 'TRANSPORT' },
+      { message: 'unexpected EOF', code: 'INVALID_REQUEST' },
+    ]) {
+      const decision = await dispatch(ctx, agent, failure, () => Promise.resolve(undefined))
+      assert.equal(decision, undefined, `${failure.message} (${failure.code})`)
+    }
+    assert.equal(retryEvents(session).length, 0)
+    assert.equal(startedEvents(session).length, 0)
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})

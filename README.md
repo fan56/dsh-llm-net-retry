@@ -3,19 +3,21 @@
 [English](README.en.md)
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）插件：重试网关以
-`finish_reason: "network_error"` 上报的模型请求失败——这类失败被 dsh 原生重试策略归为不可重试，
-导致整个 turn 直接硬失败。
+非标准措辞上报的瞬时网络失败——这类失败被 dsh 原生重试策略归为不可重试，导致整个 turn
+直接硬失败。
 
 ## 背景
 
 一些 OpenAI 兼容网关（如 [OpenCode Zen](https://opencode.ai/zen)）把自身上游连接的瞬时失败
-作为流的终止 `finish_reason` 上报，而不是走 HTTP/传输层错误。在 dsh `0.1.5-rc.2`（本插件
-跟随的 rc/stable 线；alpha 线已退役）中，两条 adapter 路径仍把它误分类：
+回传给客户端（流的终止 `finish_reason`、错误负载回显等），而不是走 HTTP/传输层错误。在
+dsh `0.1.5-rc.2`（本插件跟随的 rc/stable 线；alpha 线已退役）中，这些措辞仍被误分类：
 
 | 路径 | 产出的失败 | 原生分类 |
 |---|---|---|
 | `llm-pi-ai`（`openai-completions`） | `Provider finish_reason: network_error` | `PI_AI_ERROR`——不可重试 |
 | `llm-deepseek` | `model stopped: network_error`，code `NETWORK_ERROR` | 不可重试 |
+| `llm-pi-ai`（网关回传自身上游错误文本，[#4361](https://github.com/deepseek-ai/deepseek-harness/discussions/4361)） | `unexpected EOF` / `remote error: tls: bad record MAC` | `PI_AI_ERROR`——不可重试 |
+| `llm-pi-ai`（[#3158](https://github.com/deepseek-ai/deepseek-harness/discussions/3158)） | `stream_read_error` | `PI_AI_ERROR`——不可重试 |
 
 `dsh-llm-retry` 只重试 provider `retryableCodes` 里的码（`TRANSPORT`、`RATE_LIMIT`、`SERVER`、
 `TIMEOUT`、`EMPTY_RESPONSE`），于是没人重试，turn——包括 subagent turn——直接失败。
@@ -29,8 +31,10 @@ dsh 本体的修复已备好并充分测试（fork 分支
 [`fix/network-error-retryable`](https://github.com/fan56/deepseek-harness/tree/fix/network-error-retryable)；
 dsh 目前不接受外部 PR，已按官方渠道报告至
 [Discussions #3949](https://github.com/deepseek-ai/deepseek-harness/discussions/3949)）。
-在修复合入前，本插件就是解决方案；合入后它也无害：只在整个 `agent/request-error`
-waterfall 弃权时才行动，且绝不触碰 llm-retry 自身的重试计数。
+此后同族问题仍在官方仓持续新增报告（[#3158](https://github.com/deepseek-ai/deepseek-harness/discussions/3158)、
+[#4361](https://github.com/deepseek-ai/deepseek-harness/discussions/4361) 及其 2026-09-13 追评），
+修复尚未合入。在此之前，本插件就是解决方案；合入后它也无害：只在整个 `agent/request-error`
+waterfall 弃权且 code 落在官方分类盲区时才行动，且绝不触碰 llm-retry 自身的重试计数。
 
 ## 工作原理
 
@@ -38,15 +42,22 @@ waterfall 弃权时才行动，且绝不触碰 llm-retry 自身的重试计数�
 
 1. 先调用 `next()`——provider 的策略执行器（`dsh-llm-retry`）先决策。任何一方决定重试，
    该决策原样透传。
-2. 只有当所有 listener 都弃权，且失败消息命中漏网的 network 变体——`network_error` /
-   `network-error` / `network error`，或 pi-ai 对未识别网关 stop reason 的
-   `Provider finish_reason:` 渲染——才调度本插件自己的有界重试。
+2. 只有当所有 listener 都弃权，且失败落在官方分类的盲区（消息 + code 双重判定，见下），
+   才调度本插件自己的有界重试。消息侧覆盖：`network_error` / `network-error` /
+   `network error`，pi-ai 对未识别网关 stop reason 的 `Provider finish_reason:` 渲染，
+   网关回传的传输层措辞 `unexpected EOF`（含 `HPE_UNEXPECTED_EOF…`、zlib 的
+   `unexpected end of file` 变体）、`remote error: tls: bad record MAC`、
+   `stream_read_error`。
 3. 重试持久化且可见：`llm/retry` / `llm/retry-started` session 事件，schema 与 llm-retry
    兼容，TUI 无需改动即可展示。计数使用本插件自己的 policy key（`net-retry:v1…`），
    绝不污染 llm-retry 的计数。
 
-已被分类为 `TRANSPORT` 的失败（ECONNRESET、`terminated`、流截断、超时、HTTP 5xx）由原生
-策略重试，本插件刻意不再重复匹配。
+**code 守卫**：官方策略已认领的码即使消息命中也让位——默认可重试集（`EMPTY_RESPONSE` /
+`RATE_LIMIT` / `SERVER` / `TIMEOUT` / `TRANSPORT`）的恢复权（含其放弃重试的决定）归原生
+策略，永久性失败（`AUTH`、`INVALID_REQUEST`、`QUOTA` 等）与用户中止（`ABORTED`）重试也
+无济于事。其余码（`PI_AI_ERROR` 兜底、deepseek 未知 reason 码、裸抛 `UNKNOWN`、
+`HTTP_<status>` 零星码）落到消息匹配。这也意味着：上游将来若把某措辞归类为 `TRANSPORT`，
+原生策略自动接管，本插件自然让位，不会叠加双重重试。
 
 ## 安装
 
@@ -96,12 +107,16 @@ dsh plugin --profile <profile> remove @aiwayds/dsh-llm-net-retry
 
 ## 验证
 
-- 单测：匹配表（正/负例）、注入随机数的退避计算、配置校验、真实 cordis context 上的决策链
-  （透传/重试/计数/abort/mode off/下游异常韧性）。
+- 单测：匹配表（正/负例 × 各错误码、code 守卫、近失拼写）、注入随机数的退避计算、配置校验、
+  真实 cordis context 上的决策链（透传/重试/计数/abort/mode off/下游异常韧性）。
 - e2e：真实 agent loop + 真实 `llm-pi-ai` `openai-completions` adapter，打脚本化本地网关
-  （前两次请求回 `finish_reason: "network_error"`）——第三次请求完成 turn、`llm/retry`
-  事件落盘；负向对照（无插件）一次请求后 turn 即硬失败。
-- 真实宿主：已在 dsh 0.1.0-rc.8 的 `--profile tui`（dsh-tui-pi）上实测，重试链
+  （前两次请求回 `finish_reason: "network_error"`；另一条 leg 回 relay-echo 形态的
+  `finish_reason: "unexpected EOF"`）——重试后完成 turn、`llm/retry` 事件落盘；负向对照
+  （无插件）一次请求后 turn 即硬失败。
+- 集成核验：以本机安装的 dsh `0.1.5-rc.2` 分类器的真实输出为基准，逐措辞断言
+  "官方归 `PI_AI_ERROR` ⇔ 本插件认领"。
+- 真实宿主：smoke-boot 把构建产物装进隔离 scratch profile，真实 `dsh` CLI 组树、启动、
+  卸载复原；另曾在 dsh 0.1.0-rc.8 的 `--profile tui`（dsh-tui-pi）上实测，重试链
   （指数退避、稳定 retryId、事件落盘、TUI 展示）全部正确。
 
 ```bash

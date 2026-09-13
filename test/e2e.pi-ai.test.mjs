@@ -20,6 +20,8 @@ import * as NetRetry from '../lib/index.js'
 
 /** A gateway stop chunk reporting its own upstream connection failure. */
 const NETWORK_ERROR_CHUNK = '{"choices":[{"delta":{},"index":0,"finish_reason":"network_error"}]}'
+/** Relay-echo shape from #4361: the gateway's upstream error text as the wire finish reason. */
+const UNEXPECTED_EOF_CHUNK = '{"choices":[{"delta":{},"index":0,"finish_reason":"unexpected EOF"}]}'
 
 const SUCCESS_EVENTS = [
   '{"choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}',
@@ -29,9 +31,9 @@ const SUCCESS_EVENTS = [
 
 /**
  * OpenAI-compatible SSE gateway that answers the first `failures` requests
- * with a network_error finish_reason and every later one with plain text.
+ * with the failure chunk and every later one with plain text.
  */
-function startGateway(failures) {
+function startGateway(failures, failureChunk = NETWORK_ERROR_CHUNK) {
   let requests = 0
   const bodies = []
   const server = createServer((request, response) => {
@@ -43,7 +45,7 @@ function startGateway(failures) {
       requests += 1
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       if (failed) {
-        response.write(`data: ${NETWORK_ERROR_CHUNK}\n\n`)
+        response.write(`data: ${failureChunk}\n\n`)
         response.write('data: [DONE]\n\n')
         response.end()
         return
@@ -128,6 +130,32 @@ test('e2e: retries two gateway network_error finishes and completes the turn', a
     const started = agent.session.snapshotEvents().filter(event => event.type === 'llm/retry-started')
     assert.deepEqual(started.map(event => event.data.retry), [1, 2])
     assert.equal(new Set(retryEvents.map(event => event.data.retryId)).size, 1)
+  } finally {
+    await ctx.fiber.dispose()
+    await gateway.close()
+  }
+})
+
+test('e2e: retries a relay-echoed unexpected EOF finish and completes the turn', async () => {
+  // #4361 comment 18418461: gateways relay their own upstream error text (here
+  // as the wire finish reason); the message reaches the classifier as
+  // `Provider finish_reason: unexpected EOF` and must be claimed by the net.
+  const gateway = await startGateway(1, UNEXPECTED_EOF_CHUNK)
+  const ctx = await harness(gateway.url, { maxRetries: 2, backoff: { initialDelayMs: 5, maxDelayMs: 5, jitterRatio: 0 } })
+  try {
+    const agent = await ctx.agentLoop.create(SessionId('e2e-net-retry-eof'), {
+      provider: 'mockgw',
+      model: 'ox-alpha-free',
+    })
+    await sendAndWait(agent)
+
+    assert.equal(gateway.requestCount, 2, 'one failure plus the successful retry')
+    assert.equal(finalAssistantText(agent), 'recovered via net-retry')
+
+    const retryEvents = agent.session.snapshotEvents().filter(event => event.type === 'llm/retry')
+    assert.deepEqual(retryEvents.map(event => event.data.retry), [1])
+    assert.equal(retryEvents[0].data.failure.message, 'Provider finish_reason: unexpected EOF')
+    assert.equal(retryEvents[0].data.failure.code, 'PI_AI_ERROR')
   } finally {
     await ctx.fiber.dispose()
     await gateway.close()
