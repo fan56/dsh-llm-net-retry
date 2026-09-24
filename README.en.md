@@ -12,8 +12,9 @@ classify and therefore lets hard-fail the whole turn.
 Some gateways (e.g. [OpenCode Zen](https://opencode.ai/zen)) relay their own
 upstream connection failure to the client (as the stream's terminal
 `finish_reason`, echoed error payloads, …) instead of an HTTP/transport error.
-On dsh `0.1.5-rc.2` (the rc/stable line this plugin tracks; the alpha line is
-retired) those wordings are still mis-classified:
+On dsh `0.1.5-rc.2` (the rc/stable line this plugin tracked before the 0.1.7
+migration; same on the 0.1.7 Messages line, see the next section) those
+wordings are still mis-classified:
 
 | Path | Failure produced | Stock classification |
 |---|---|---|
@@ -159,7 +160,7 @@ Unknown keys are rejected. Defaults match llm-retry's stock policy
   completes after the retries with `llm/retry` events recorded, while the
   negative control (plugin absent) fails after exactly one request.
 - Integration check: the real classifier output of the locally installed dsh
-  `0.1.5-rc.2` is the baseline — every covered wording is asserted to be
+  `0.1.7-rc.1` is the baseline — every covered wording is asserted to be
   classified `PI_AI_ERROR` there and claimed by this net.
 
 ```bash

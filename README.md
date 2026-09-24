@@ -10,7 +10,7 @@
 
 一些 OpenAI 兼容网关（如 [OpenCode Zen](https://opencode.ai/zen)）把自身上游连接的瞬时失败
 回传给客户端（流的终止 `finish_reason`、错误负载回显等），而不是走 HTTP/传输层错误。在
-dsh `0.1.5-rc.2`（本插件跟随的 rc/stable 线；alpha 线已退役）中，这些措辞仍被误分类：
+dsh `0.1.5-rc.2`（迁移前跟随的 rc/stable 线；0.1.7 Messages 线同此，见下节）中，这些措辞仍被误分类：
 
 | 路径 | 产出的失败 | 原生分类 |
 |---|---|---|
@@ -130,7 +130,7 @@ dsh plugin --profile <profile> remove @aiwayds/dsh-llm-net-retry
   （前两次请求回 `finish_reason: "network_error"`；另一条 leg 回 relay-echo 形态的
   `finish_reason: "unexpected EOF"`）——重试后完成 turn、`llm/retry` 事件落盘；负向对照
   （无插件）一次请求后 turn 即硬失败。
-- 集成核验：以本机安装的 dsh `0.1.5-rc.2` 分类器的真实输出为基准，逐措辞断言
+- 集成核验：以本机安装的 dsh `0.1.7-rc.1` 分类器的真实输出为基准，逐措辞断言
   "官方归 `PI_AI_ERROR` ⇔ 本插件认领"。
 - 真实宿主：smoke-boot 把构建产物装进隔离 scratch profile，真实 `dsh` CLI 组树、启动、
   卸载复原；另曾在 dsh 0.1.0-rc.8 的 `--profile tui`（dsh-tui-pi）上实测，重试链
