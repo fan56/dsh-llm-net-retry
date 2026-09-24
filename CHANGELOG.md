@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-(none)
+### Changed
+- **dsh closure moved to 0.1.7-rc.1** (dev pins exact `0.1.7-rc.1`, peer floor `>=0.1.7-rc.1`). The official DeepSeek adapter is Messages API-only in this line (Chat Completions and the `protocol` option removed); error-text sources on the Messages wire were re-verified against the official `llm-deepseek` sources at tag `dsh-v0.1.7-rc.1`.
+- Shared closure pins lifted to what the 0.1.7-rc.1 packages declare: `@deepseek-ai/cordis` `4.0.2` → `4.0.4` (peer `~4.0.4` across the whole dsh closure) and `@deepseek-ai/schemastery` `3.18.2` → `3.18.4` (dsh-llm depends on `~3.18.4`); `package-lock.json` regenerated against the new graph (npm's lock-only builder chokes on `agent-base`'s stray `tsconfig@0.0.0` devDep — generated from a real install; day-to-day install tool is pnpm, `pnpm-lock.yaml` added).
+- All four existing patterns still hit on the 0.1.7 wire: `network[-_ ]error`, `provider finish_reason:` (pi-ai remains multi-protocol; the wording is intact in `@earendil-works/pi-ai` `openai-completions`, re-proven by the e2e suite), `unexpected EOF`/TLS/`stream_read_error` (gateway echoes still reach the classifier bare with out-of-taxonomy codes).
+
+### Added
+- **Two Messages-wire patterns** (fixtures sampled from the official adapter's error construction; matcher signature `(message, code)` and the blocklist guard semantics unchanged — the net still stands down automatically when upstream classifies a code `TRANSPORT` etc.):
+  - `unsupported stop reason` — `DeepSeek Messages stream: unsupported stop reason <reason>` (`MALFORMED_RESPONSE`, `translate.ts` `stopReason()`), the Messages successor of the `provider finish_reason:` face; `network_error` spellings were already covered, every other reason is claimed now.
+  - `stream ended (?:before|without)\b` — the early-stream-end family: `DeepSeek Messages stream ended before message_stop` and pi-ai's `pi-ai event stream ended without done/error` (both `STREAM_CLOSED`). A clean SSE close is not a read error, so the adapter's `TRANSPORT` wrap never sees it; same wording rule pi-ai upstream uses to classify its own provider truncation texts `TRANSPORT` — the code guard splits them, only unclassified `STREAM_CLOSED` spills are claimed.
+- Fixture tests for the Messages wire, including negative controls: read-path wraps (`DeepSeek Messages transport failed` → `TRANSPORT`), in-band SSE error events (always classify into blocked codes), idle timeout, empty settlements, and protocol-corruption wordings stay with the stock policy.
+- **Plugin Manager metadata.** Added `icon.svg` and `locale/{en,zh}.json` (`meta.title`/`meta.description` per the official `readPluginMeta` contract); `package.json` now declares the `icon` and ships both in the tarball.
+
+### Documentation
+- Both READMEs document the 0.1.7 Messages-wire error surface (what changed, what the plugin now claims, what it hands to the stock policy) and raise the support floor to `>=0.1.7-rc.1`; `src/match.ts` documents the audited Messages-path evidence.
+- `snapshotEvents` at the retry-counting read (src/index.ts) is kept per the official soft-deprecation contract ("existing logic may remain unmigrated") — the registered-projection successor only interprets message-producing events (our `llm/retry` records are non-surface) and the persistence `handle.read()` pagination is a structural rewrite, not a drop-in. Annotated at the call site.
 
 ## [0.5.0] - 2026-09-13
 

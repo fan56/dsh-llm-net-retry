@@ -27,6 +27,23 @@ retired) those wordings are still mis-classified:
 retries and the turn — including subagent turns — fails outright. Retrying
 immediately almost always succeeds; these are transient gateway-side drops.
 
+**Since dsh `0.1.7`** the official DeepSeek adapter is Messages API-only (Chat
+Completions and the `protocol` option are gone; anthropic-style `/messages`
+SSE), which moves the error-text sources (verified against the
+`llm-deepseek` sources at tag `dsh-v0.1.7-rc.1`):
+
+| Path (0.1.7 Messages wire) | Failure produced | Stock classification | This plugin |
+|---|---|---|---|
+| Unknown `stop_reason` (`translate.ts` `stopReason()`) | `DeepSeek Messages stream: unsupported stop reason <reason>` | `MALFORMED_RESPONSE` — not retryable | claimed (`network_error` spellings via the network pattern, every other reason via the `unsupported stop reason` pattern) |
+| Stream ends cleanly before `message_stop` (gateway half-close, proxy failover) | `DeepSeek Messages stream ended before message_stop` (pi-ai wire: `pi-ai event stream ended without done/error`) | `STREAM_CLOSED` — not retryable | claimed |
+| Read-path throws (fetch rejects, body read errors, TLS, undici truncation) | `DeepSeek Messages transport failed` | `TRANSPORT` — retryable | stands down (stock policy owns it) |
+| In-band SSE `error` events (`providerError`) | gateway-echoed text | always lands in the retryable set (`SERVER` etc.) | stands down |
+
+I.e. most of the old EOF/TLS/stream-read wordings now degrade to `TRANSPORT`
+and the stock policy takes over — exactly the code guard's standing contract.
+The genuinely new blind-spot faces are `MALFORMED_RESPONSE` /
+`STREAM_CLOSED`.
+
 opencode fixed the same behavior upstream in
 [40282c1](https://github.com/anomalyco/opencode/commit/40282c1d4d5476e6b536a72c0baf3a27bcf0e4df)
 and
@@ -53,10 +70,15 @@ The plugin listens at the **end** of the `agent/request-error` waterfall:
    classifier's blind spot (message AND code, see below) schedule this
    plugin's own bounded retry. Message-side coverage: `network_error` /
    `network-error` / `network error`; pi-ai's `Provider finish_reason:`
-   rendering of an unrecognized gateway stop reason; the gateway-echoed
+   rendering of an unrecognized gateway stop reason; the Messages wire's
+   `unsupported stop reason` (since `0.1.7`, llm-deepseek's rendering of an
+   unknown anthropic `stop_reason`); the gateway-echoed
    transport wordings `unexpected EOF` (including the `HPE_UNEXPECTED_EOF…`
    and zlib `unexpected end of file` variants), `remote error: tls: bad
-   record MAC`, and `stream_read_error`.
+   record MAC`, `stream_read_error`, and the early-stream-end wordings
+   `stream ended before/without …` (`STREAM_CLOSED`; same shape as pi-ai's
+   own rule that classifies this family `TRANSPORT` — the code guard ensures
+   only the unclassified `STREAM_CLOSED` spills reach this plugin).
 3. Retries are durable and visible: `llm/retry` / `llm/retry-started` session
    events, schema-compatible with llm-retry's, so TUI surfaces render them
    unchanged. Counting uses this plugin's own policy key (`net-retry:v1…`),
@@ -151,10 +173,12 @@ events, TUI rendering) behaved exactly as designed.
 
 ## Compatibility
 
-**Requires dsh >= 0.1.5-rc.2** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
+**Requires dsh >= 0.1.7-rc.1** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
 
 Targets the `agent/request-error` waterfall and `llm/retry` event schema of
-dsh `>=0.1.5-rc.2`. The plugin is read-only with respect to the dsh base: no
+dsh `>=0.1.7-rc.1` (the soft-deprecated `snapshotEvents` read remains per the
+official deprecation contract). The plugin is read-only with respect to the
+dsh base: no
 monkey-patching, no service replacement — dispose removes it cleanly.
 
 ## License

@@ -252,6 +252,12 @@ export function apply(ctx: Context, config: Config = {}, internals: RetryInterna
     if (lifetime.signal.aborted || signal.aborted) return
     if (!isLeakedNetworkFailure(failure.message, failure.code)) return
 
+    // snapshotEvents is soft-deprecated in dsh 0.1.7 (synchronous event
+    // reads); existing logic may remain unmigrated. The official successors
+    // do not fit this read: registerMessageProjection interprets only
+    // message-producing events (our llm/retry records are non-surface), and
+    // the sessionPersistence handle.read() pagination is a service-level
+    // async rewrite, not a drop-in. Revisit when upstream forces the turn.
     const priorNetRetry = agent.session.snapshotEvents().findLast((event): event is SessionEvent<'llm/retry'> =>
       event.type === 'llm/retry'
       && event.data.turn === turn

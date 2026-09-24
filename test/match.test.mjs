@@ -42,6 +42,52 @@ test('matches any unrecognized provider finish_reason, not only network', () => 
   assert.equal(isLeakedNetworkFailure('Provider finish_reason: content_filter', LEAK), true)
 })
 
+// Fixtures sampled from the official adapter's Messages-path error
+// construction at tag dsh-v0.1.7-rc.1 (packages/llm/llm-deepseek/src).
+test('matches the Messages-wire wordings (dsh 0.1.7-rc.1 llm-deepseek)', () => {
+  for (const [message, code] of [
+    // translate.ts stopReason(): the Messages successor of the
+    // `provider finish_reason:` face; a network_error spelling is already
+    // covered by the network pattern, every other reason lands here.
+    ['DeepSeek Messages stream: unsupported stop reason tool_use', 'MALFORMED_RESPONSE'],
+    ['DeepSeek Messages stream: unsupported stop reason model_len_limit', 'MALFORMED_RESPONSE'],
+    // translate.ts tail: the stream ended cleanly (gateway half-close, proxy
+    // failover after headers) — not a read error, so the adapter's TRANSPORT
+    // wrap never sees it.
+    ['DeepSeek Messages stream ended before message_stop', 'STREAM_CLOSED'],
+    // llm-pi-ai stream.ts: the same truncation face on the pi-ai wire.
+    ['pi-ai event stream ended without done/error', 'STREAM_CLOSED'],
+  ]) {
+    assert.equal(isLeakedNetworkFailure(message, code), true, `${message} (${code})`)
+  }
+})
+
+test('Messages-wire transport and in-band errors stay with the stock policy', () => {
+  for (const [message, code] of [
+    // adapter.ts generate catch wraps every read-path throw (fetch rejects,
+    // body read errors, TLS alerts, undici truncation) into TRANSPORT.
+    ['DeepSeek Messages transport failed', 'TRANSPORT'],
+    // transport.ts providerError: in-band SSE error events always classify
+    // into blocked codes, even when the gateway echoes a leaked wording.
+    ['unexpected EOF', 'SERVER'],
+    ['stream_read_error', 'SERVER'],
+    ['DeepSeek Messages request failed (stream error)', 'SERVER'],
+    // pi-ai classifyPiAiError marks its own provider truncation texts
+    // TRANSPORT; the code guard resolves the overlap with STREAM_ENDED_EARLY.
+    ['mock stream ended before a terminal response event', 'TRANSPORT'],
+    ['Stream ended without finish_reason', 'TRANSPORT'],
+    // adapter.ts: idle watchdog and clean-empty settlements.
+    ['DeepSeek Messages stream idle timeout', 'TIMEOUT'],
+    ['DeepSeek Messages returned no content', 'EMPTY_RESPONSE'],
+    // translate.ts/sse.ts protocol corruption that names no network failure.
+    ['DeepSeek Messages SSE contains invalid JSON', 'MALFORMED_RESPONSE'],
+    ['DeepSeek Messages SSE event type mismatch', 'MALFORMED_RESPONSE'],
+    ['DeepSeek Messages stream: unsupported delta text_delta for reasoning', 'MALFORMED_RESPONSE'],
+  ]) {
+    assert.equal(isLeakedNetworkFailure(message, code), false, `${message} (${code})`)
+  }
+})
+
 test('the guard declines codes whose recovery the stock policy owns', () => {
   // Once upstream reclassifies a wording (e.g. `unexpected EOF` → TRANSPORT)
   // the stock policy retries it and the net must stand down.

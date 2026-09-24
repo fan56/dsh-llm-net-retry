@@ -23,6 +23,20 @@ dsh `0.1.5-rc.2`（本插件跟随的 rc/stable 线；alpha 线已退役）中�
 `TIMEOUT`、`EMPTY_RESPONSE`），于是没人重试，turn——包括 subagent turn——直接失败。
 而这类故障立即重试几乎总能成功。
 
+**dsh `0.1.7` 起**，官方 DeepSeek 适配器 Messages API-only（Chat Completions 与 `protocol`
+选项删除，改走 anthropic 风格 `/messages` SSE），错误文案来源随之变化（对照 tag
+`dsh-v0.1.7-rc.1` 的 `llm-deepseek` 源码核实）：
+
+| 路径（0.1.7 Messages 线） | 产出的失败 | 原生分类 | 本插件 |
+|---|---|---|---|
+| 未知 `stop_reason`（`translate.ts` `stopReason()`） | `DeepSeek Messages stream: unsupported stop reason <reason>` | `MALFORMED_RESPONSE`——不可重试 | 认领（`network_error` 拼写由网络 pattern 覆盖，其余 reason 由 `unsupported stop reason` pattern 覆盖） |
+| 流在 `message_stop` 前干净收尾（网关半关、代理 failover） | `DeepSeek Messages stream ended before message_stop`（pi-ai 线为 `pi-ai event stream ended without done/error`） | `STREAM_CLOSED`——不可重试 | 认领 |
+| 读路径抛错（fetch 拒绝、body 读错误、TLS、undici 截断） | `DeepSeek Messages transport failed` | `TRANSPORT`——可重试 | 让位（原生策略接管） |
+| SSE 带内 `error` 事件（`providerError`） | 网关回显文本 | 恒落在可重试集（`SERVER` 等） | 让位 |
+
+即：旧的 EOF/TLS/stream-read 措辞在新线上多数落进 `TRANSPORT` 由原生策略接管（这正是 code
+守卫的既有契约）；真正**漏出**分类盲区的是 `MALFORMED_RESPONSE` / `STREAM_CLOSED` 两个新面。
+
 opencode 在上游修过同样的问题：
 [40282c1](https://github.com/anomalyco/opencode/commit/40282c1d4d5476e6b536a72c0baf3a27bcf0e4df)、
 [e0b9e68](https://github.com/anomalyco/opencode/commit/e0b9e68a68a8bc8367d84e305efd114d0445348a)。
@@ -45,9 +59,12 @@ waterfall 弃权且 code 落在官方分类盲区时才行动，且绝不触碰 
 2. 只有当所有 listener 都弃权，且失败落在官方分类的盲区（消息 + code 双重判定，见下），
    才调度本插件自己的有界重试。消息侧覆盖：`network_error` / `network-error` /
    `network error`，pi-ai 对未识别网关 stop reason 的 `Provider finish_reason:` 渲染，
-   网关回传的传输层措辞 `unexpected EOF`（含 `HPE_UNEXPECTED_EOF…`、zlib 的
-   `unexpected end of file` 变体）、`remote error: tls: bad record MAC`、
-   `stream_read_error`。
+   Messages 线的 `unsupported stop reason`（`0.1.7` 起 llm-deepseek 对未知 anthropic
+   stop_reason 的渲染），网关回传的传输层措辞 `unexpected EOF`（含 `HPE_UNEXPECTED_EOF…`、
+   zlib 的 `unexpected end of file` 变体）、`remote error: tls: bad record MAC`、
+   `stream_read_error`，以及流提前收尾措辞 `stream ended before/without …`
+   （`STREAM_CLOSED`；与 pi-ai 自身把同族措辞归 `TRANSPORT` 的规则同形，code 守卫保证
+   只有未分类的 `STREAM_CLOSED` 落到本插件）。
 3. 重试持久化且可见：`llm/retry` / `llm/retry-started` session 事件，schema 与 llm-retry
    兼容，TUI 无需改动即可展示。计数使用本插件自己的 policy key（`net-retry:v1…`），
    绝不污染 llm-retry 的计数。
@@ -127,9 +144,10 @@ e2e 在隔离的临时 `$HOME` 下运行，绝不触碰 `~/.dsh`。
 
 ## 兼容性
 
-**要求 dsh >= 0.1.5-rc.2** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
+**要求 dsh >= 0.1.7-rc.1** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
 
-面向 dsh `>=0.1.5-rc.2` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema。插件对
+面向 dsh `>=0.1.7-rc.1` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema（`snapshotEvents`
+软废弃照官方约定保留存量用法）。插件对
 dsh 本体零侵入：无 monkey-patch、不替换服务，dispose 即干净移除。
 
 ## 许可证

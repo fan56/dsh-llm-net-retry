@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-llm-net-retry",
+    "description": "对网关瞬态网络错误（network_error、EOF、TLS 告警、流读取失败）做有界重试，补上官方重试策略的盲区。"
+  }
+}

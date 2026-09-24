@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-llm-net-retry",
+    "description": "Bounded retry for transient gateway network failures the stock policy cannot classify: network_error, EOF, TLS alerts, stream read errors."
+  }
+}

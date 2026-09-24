@@ -25,6 +25,43 @@
  *   `stream_read_error` (#3158). None matches a stock branch, so all land as
  *   `PI_AI_ERROR`.
  *
+ * ## dsh 0.1.7-rc.1: the official DeepSeek adapter is Messages API-only
+ *
+ * Chat Completions and the `protocol` option are gone (`llm-deepseek`
+ * serialize/adapter); the Messages wire (`POST /messages`, anthropic-style
+ * SSE) sources error text differently. Audited at tag `dsh-v0.1.7-rc.1`:
+ *
+ * - Unknown `stop_reason` values (anthropic spellings `end_turn` /
+ *   `stop_sequence` / `tool_use` / `max_tokens` are the only ones
+ *   translated) throw `DeepSeek Messages stream: unsupported stop reason
+ *   <reason>` with code `MALFORMED_RESPONSE` (`translate.ts` `stopReason`) —
+ *   the successor of the `provider finish_reason:` face above; a
+ *   `network_error` spelling is already claimed by {@link NETWORK_ERROR},
+ *   every other reason is claimed by {@link UNSUPPORTED_STOP_REASON}.
+ * - A stream that ends cleanly before `message_stop` (gateway half-close,
+ *   proxy failover after headers) is NOT a read error on this wire: the SSE
+ *   decoder simply finishes, and the translator throws
+ *   `DeepSeek Messages stream ended before message_stop` (`STREAM_CLOSED`),
+ *   mirrored by pi-ai's `pi-ai event stream ended without done/error`
+ *   (`llm-pi-ai` `stream.ts`). `STREAM_CLOSED` is outside the stock
+ *   retryable set, so {@link STREAM_ENDED_EARLY} claims it.
+ * - Everything that throws on the read path (fetch rejects, body read
+ *   errors, TLS alerts, undici truncation) is wrapped by the adapter into
+ *   `DeepSeek Messages transport failed` with code `TRANSPORT`
+ *   (`adapter.ts` generate catch) — the stock policy owns those and the code
+ *   guard keeps the net out of the way. In-band SSE `error` events classify
+ *   via `transport.ts` `providerError` and can only land on blocked codes
+ *   (AUTH/QUOTA/RATE_LIMIT/CONTEXT_WINDOW_EXCEEDED/INVALID_REQUEST/SERVER),
+ *   so gateway text echoed there is the stock policy's to retry.
+ * - pi-ai remains multi-protocol (`openai-completions` API still mounted in
+ *   `llm-pi-ai` `provider.ts`), and its new `classifyPiAiError` leaves the
+ *   leaked wordings above as `PI_AI_ERROR` — the e2e suite exercises that
+ *   wire unchanged. pi-ai provider wordings meaning "stream ended before or
+ *   without a terminal event" are classified `TRANSPORT` by pi-ai itself
+ *   (same `/stream ended (?:before|without)/` rule as
+ *   {@link STREAM_ENDED_EARLY}); the code guard resolves the overlap: only
+ *   the `STREAM_CLOSED` spills are ours.
+ *
  * Note that undici's OWN truncation wording (`terminated`, cause
  * `other side closed`) and plain mid-stream connection errors
  * (`Connection error.` from the openai SDK) are already stock `TRANSPORT`
@@ -49,7 +86,10 @@
  * the stock policy starts retrying them and the guard keeps this net out of
  * the way. Everything else — the catch-all `PI_AI_ERROR`, the DeepSeek
  * unknown-reason codes (e.g. `NETWORK_ERROR`), raw-throw `UNKNOWN`,
- * oddball `HTTP_<status>` codes — falls through to the message patterns.
+ * oddball `HTTP_<status>` codes, and the Messages wire's protocol codes
+ * `MALFORMED_RESPONSE` / `STREAM_CLOSED` / `UNSUPPORTED_CONTENT` — falls
+ * through to the message patterns. The stock set was re-verified unchanged
+ * at dsh 0.1.7-rc.1 (`llm/src/retry-policy.ts` `DEFAULT_RETRYABLE_CODES`).
  *
  * ## Adjudication: RemoteError cannot reach this waterfall (dsh 0.1.2-alpha.3)
  *
@@ -93,6 +133,17 @@ const NETWORK_ERROR = /network[-_ ]error/i
 const PROVIDER_FINISH_REASON = /provider finish_reason:/i
 
 /**
+ * The Messages wire's successor of the finish_reason face: the official
+ * DeepSeek adapter translates exactly four anthropic `stop_reason` spellings
+ * and throws `DeepSeek Messages stream: unsupported stop reason <reason>`
+ * (`MALFORMED_RESPONSE`) for anything else a gateway invents. Claimed for
+ * every reason — same "any unrecognized terminal reason" parity as
+ * {@link PROVIDER_FINISH_REASON}; a `network_error` spelling is already
+ * covered by {@link NETWORK_ERROR} and this adds the rest.
+ */
+const UNSUPPORTED_STOP_REASON = /\bunsupported stop reason\b/i
+
+/**
  * A response body cut short without a provider-specific truncation wording:
  * Go's `io.ErrUnexpectedEOF` (`unexpected EOF`), Node's HTTP parser variant
  * (`HPE_UNEXPECTED_EOF...` — underscore joins the words), zlib's truncated
@@ -111,6 +162,18 @@ const TLS_ALERT = /\bbad record MAC\b|remote error:\s*tls:/i
 
 /** A gateway-normalized mid-stream read failure (#3158). */
 const STREAM_READ_ERROR = /\bstream[_\s-]+read[_\s-]+error\b/i
+
+/**
+ * A gateway stream that ended before the provider's terminal event: the
+ * Messages translator's `DeepSeek Messages stream ended before message_stop`
+ * and pi-ai's `pi-ai event stream ended without done/error`, both code
+ * `STREAM_CLOSED` (a clean SSE close is not a read error, so the adapter's
+ * `TRANSPORT` wrap never sees it). Same wording rule pi-ai upstream applies
+ * to its own provider truncation texts when classifying them `TRANSPORT` —
+ * here the code guard does the split: `TRANSPORT` copies stand down, only
+ * the unclassified `STREAM_CLOSED` spills are claimed.
+ */
+const STREAM_ENDED_EARLY = /stream ended (?:before|without)\b/i
 
 /**
  * Codes the net never claims: the stock policy's default retryable set, the
@@ -149,7 +212,9 @@ export function isLeakedNetworkFailure(message: string, code: string): boolean {
   if (NOT_OURS.has(code)) return false
   return NETWORK_ERROR.test(message)
     || PROVIDER_FINISH_REASON.test(message)
+    || UNSUPPORTED_STOP_REASON.test(message)
     || UNEXPECTED_EOF.test(message)
     || TLS_ALERT.test(message)
     || STREAM_READ_ERROR.test(message)
+    || STREAM_ENDED_EARLY.test(message)
 }
