@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+- **`ACCOUNT_QUOTA` joins the never-claim blocklist.** dsh 0.1.7-rc.2 added the canonical account-quota code (`ACCOUNT_QUOTA_EXCEEDED_CODE` in `dsh-llm/error.d.ts` — account-token quota rechargeable through the first-party billing page, the same permanent no-retry family as `QUOTA`). Fixture-tested alongside the `QUOTA` control (audited at tag `dsh-v0.1.7-rc.2`).
+
+## [0.6.0] - 2026-09-24
+
 ### Changed
 - **dsh closure moved to 0.1.7-rc.1** (dev pins exact `0.1.7-rc.1`, peer floor `>=0.1.7-rc.1`). The official DeepSeek adapter is Messages API-only in this line (Chat Completions and the `protocol` option removed); error-text sources on the Messages wire were re-verified against the official `llm-deepseek` sources at tag `dsh-v0.1.7-rc.1`.
 - Shared closure pins lifted to what the 0.1.7-rc.1 packages declare: `@deepseek-ai/cordis` `4.0.2` → `4.0.4` (peer `~4.0.4` across the whole dsh closure) and `@deepseek-ai/schemastery` `3.18.2` → `3.18.4` (dsh-llm depends on `~3.18.4`); `package-lock.json` regenerated against the new graph (npm's lock-only builder chokes on `agent-base`'s stray `tsconfig@0.0.0` devDep — generated from a real install; day-to-day install tool is pnpm, `pnpm-lock.yaml` added).

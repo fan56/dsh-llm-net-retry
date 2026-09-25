@@ -78,7 +78,7 @@
  *   bounded retry on top would double the attempt budget behind the user's
  *   back.
  * - permanent failures (`AUTH`, `INVALID_REQUEST`, `CONTEXT_WINDOW_EXCEEDED`,
- *   `QUOTA`, `INVALID_CREDENTIAL`) — no retry can change the outcome.
+ *   `QUOTA`, `ACCOUNT_QUOTA`, `INVALID_CREDENTIAL`) — no retry can change the outcome.
  * - caller aborts (`ABORTED`).
  *
  * This is also what makes the net stand down automatically if upstream later
@@ -90,6 +90,9 @@
  * `MALFORMED_RESPONSE` / `STREAM_CLOSED` / `UNSUPPORTED_CONTENT` — falls
  * through to the message patterns. The stock set was re-verified unchanged
  * at dsh 0.1.7-rc.1 (`llm/src/retry-policy.ts` `DEFAULT_RETRYABLE_CODES`).
+ * The dsh 0.1.7-rc.2 audit found that dsh-llm `error.d.ts` added the
+ * account-quota code `ACCOUNT_QUOTA`; this list now includes it (audited at
+ * tag `dsh-v0.1.7-rc.2`).
  *
  * ## Adjudication: RemoteError cannot reach this waterfall (dsh 0.1.2-alpha.3)
  *
@@ -196,6 +199,7 @@ const NOT_OURS: ReadonlySet<string> = new Set([
   'INVALID_REQUEST',
   'CONTEXT_WINDOW_EXCEEDED',
   'QUOTA',
+  'ACCOUNT_QUOTA',
   // User-initiated.
   'ABORTED',
 ])

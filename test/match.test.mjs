@@ -101,7 +101,14 @@ test('the guard declines codes whose recovery the stock policy owns', () => {
 })
 
 test('the guard declines permanent failures and caller aborts', () => {
-  for (const code of ['AUTH', 'INVALID_CREDENTIAL', 'INVALID_REQUEST', 'CONTEXT_WINDOW_EXCEEDED', 'QUOTA', 'ABORTED']) {
+  for (const code of ['AUTH', 'INVALID_CREDENTIAL', 'INVALID_REQUEST', 'CONTEXT_WINDOW_EXCEEDED', 'QUOTA', 'ACCOUNT_QUOTA', 'ABORTED']) {
+    assert.equal(isLeakedNetworkFailure('unexpected EOF', code), false, code)
+    assert.equal(isLeakedNetworkFailure('Provider finish_reason: network_error', code), false, code)
+  }
+})
+
+test('ACCOUNT_QUOTA stays blocked for leaked network wordings, matching QUOTA', () => {
+  for (const code of ['ACCOUNT_QUOTA', 'QUOTA']) {
     assert.equal(isLeakedNetworkFailure('unexpected EOF', code), false, code)
     assert.equal(isLeakedNetworkFailure('Provider finish_reason: network_error', code), false, code)
   }
