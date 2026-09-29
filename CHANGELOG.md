@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Changed
+- **raise dsh host floor to 0.2.0-rc.2** (dev pins `0.1.7-rc.1` → `0.2.0-rc.2` across the nine-package closure; peer floors `>=0.2.0-rc.2`). The error-text surfaces `match.ts` pattern-matches were re-verified against the 0.2.0-rc.2 closure before bumping, and none drifted: pi-ai `0.85.1` → `0.87.1` still renders `Provider finish_reason: <reason>` (`openai-completions.js`) and the `stream ended (?:before|without)` family (`utils/retry.js`); `dsh-llm-pi-ai` still throws `pi-ai event stream ended without done/error` (`STREAM_CLOSED`); `dsh-llm-deepseek` still emits `unsupported stop reason` / `DeepSeek Messages stream ended before message_stop` / `DeepSeek Messages transport failed`; `DEFAULT_RETRYABLE_CODES` is unchanged (`NOT_OURS` stays correct). cordis `4.0.4` / schemastery `3.18.4` stay (the 0.2.0 closure pins the same). `package-lock.json` regenerated from a clean install (the stale 0.1.7 lock graph ERESOLVEs against the new pins — same agent-base-era workaround as 0.6.0). Full suite on the new closure: 24 fixture/decision + 3 e2e (real pi-ai 0.87.1 wire) all green; real-host smoke boots clean on 0.2.0-rc.2.
+
 ### Fixed
 - **`ACCOUNT_QUOTA` joins the never-claim blocklist.** dsh 0.1.7-rc.2 added the canonical account-quota code (`ACCOUNT_QUOTA_EXCEEDED_CODE` in `dsh-llm/error.d.ts` — account-token quota rechargeable through the first-party billing page, the same permanent no-retry family as `QUOTA`). Fixture-tested alongside the `QUOTA` control (audited at tag `dsh-v0.1.7-rc.2`).
 

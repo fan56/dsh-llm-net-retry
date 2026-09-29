@@ -144,9 +144,9 @@ e2e 在隔离的临时 `$HOME` 下运行，绝不触碰 `~/.dsh`。
 
 ## 兼容性
 
-**要求 dsh >= 0.1.7-rc.1** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
+**要求 dsh >= 0.2.0-rc.2** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
 
-面向 dsh `>=0.1.7-rc.1` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema（`snapshotEvents`
+面向 dsh `>=0.2.0-rc.2` 的 `agent/request-error` waterfall 与 `llm/retry` 事件 schema（`snapshotEvents`
 软废弃照官方约定保留存量用法）。插件对
 dsh 本体零侵入：无 monkey-patch、不替换服务，dispose 即干净移除。
 
