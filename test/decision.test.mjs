@@ -4,6 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as NetRetry from '../lib/index.js'
 
 const FAST = { maxRetries: 2, backoff: { initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 } }
@@ -13,6 +14,11 @@ async function setup(config = FAST) {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
+  // dsh 0.2.2-rc.1: AgentRegistry now declares `inject = ["sessionProjections"]`,
+  // so the registry (and with it this plugin's own `inject = ["agents"]`)
+  // never materializes unless the projection registry is installed first —
+  // the real host mounts it at boot; the minimal context must mirror that.
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(NetRetry, config)
   const session = ctx.sessions.create(SessionId(`decision-${Math.random().toString(36).slice(2)}`))
@@ -133,6 +139,7 @@ test('mode off leaves the waterfall untouched', async () => {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(NetRetry, { mode: 'off' })
   const session = ctx.sessions.create(SessionId('decision-off'))
