@@ -1,6 +1,6 @@
 {
   "name": "@aiwayds/dsh-llm-net-retry",
-  "version": "0.1.2",
+  "version": "0.8.0",
   "description": "dsh plugin: bounded retry for transient gateway network failures the stock retry policy cannot classify (finish_reason: network_error, unexpected EOF, TLS alerts, stream read errors)",
   "type": "module",
   "main": "lib/index.js",
