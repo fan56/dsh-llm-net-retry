@@ -1,5 +1,5 @@
-# CI: typecheck + tests + a real-host boot smoke on every push to main, every
-# pull request, and a daily schedule.
+# CI: typecheck + tests + a real-host boot smoke on every push to main and
+# every pull request.
 #
 # The dsh host is installed from the rolling rc/stable line — CI resolves the
 # newest of the `latest` (stable) and `next` (rc) dist-tags at runtime, never
@@ -8,17 +8,13 @@
 # 2026-09-03). The linker (scripts/link-dsh-closure.mjs) then re-points every
 # node_modules/@deepseek-ai/* entry at that install's closure, so check, test,
 # and smoke run against the real host's own copies — one cordis instance, one
-# type graph. The daily schedule catches upstream rc/stable drift without a
-# push.
+# type graph.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    # Daily 03:47 UTC.
-    - cron: '47 3 * * *'
 
 permissions:
   contents: read
