@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **0.2.2-rc.2 wave: zero code changes — dev closure re-pinned.** Dev pins move `0.2.2-rc.1` → `0.2.2-rc.2` across the nine-package closure; peer floors stay `>=0.2.0-rc.2` (pre-flight `includePrerelease` already matches 0.2.2-rc.2); `package-lock.json` regenerated against registry.npmjs.org, and a new `.npmrc` (`legacy-peer-deps=true`, same as dsh-feishu / dsh-cron) replaces the exact pins' cross-package peers that the public registry cannot satisfy. Error-wording surface re-verified against the 0.2.2-rc.2 closure: the `agent/request-error` waterfall, `RequestErrorAction`, and every pattern `match.ts` claims are unchanged. Suite against the real 0.2.2-rc.2 closure: 24 fixture/decision + 3 pi-ai e2e all green; typecheck clean; boot smoke pass.
+
 ## [0.8.0] - 2026-11-06
 
 ### Changed
