@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **npm packaged upgrade regression test.** `test/packaged-upgrade.test.mjs` installs the published 0.8.0 baseline in a scratch consumer, packs the repo, then upgrades that consumer to the tarball and asserts the package carries no `preinstall`/`install`/`postinstall` hook, still ships its bundle patch and entry, and leaves the consumer tree untouched — the pnpm 11 `strictDepBuilds` / `ERR_PNPM_IGNORED_BUILDS` class (see dsh-subagent-registry#10). No product change.
+
 ### Changed
 - **0.2.2-rc.2 wave: zero code changes — dev closure re-pinned.** Dev pins move `0.2.2-rc.1` → `0.2.2-rc.2` across the nine-package closure; peer floors stay `>=0.2.0-rc.2` (pre-flight `includePrerelease` already matches 0.2.2-rc.2); `package-lock.json` regenerated against registry.npmjs.org, and a new `.npmrc` (`legacy-peer-deps=true`, same as dsh-feishu / dsh-cron) replaces the exact pins' cross-package peers that the public registry cannot satisfy. Error-wording surface re-verified against the 0.2.2-rc.2 closure: the `agent/request-error` waterfall, `RequestErrorAction`, and every pattern `match.ts` claims are unchanged. Suite against the real 0.2.2-rc.2 closure: 24 fixture/decision + 3 pi-ai e2e all green; typecheck clean; boot smoke pass.
 
